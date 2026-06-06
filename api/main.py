@@ -38,6 +38,9 @@ from api.routers import (
 from api.routers import commands as commands_router
 from api.edunote.exam import router as exam_router
 from api.edunote.quiz import router as quiz_router
+from api.edunote.flashcards import router as flashcards_router
+from api.edunote.progress import router as progress_router
+from api.edunote.quickprep import router as quickprep_router
 from open_notebook.database.async_migrate import AsyncMigrationManager
 from open_notebook.exceptions import (
     AuthenticationError,
@@ -314,6 +317,9 @@ app.include_router(credentials.router, prefix="/api", tags=["credentials"])
 app.include_router(languages.router, prefix="/api", tags=["languages"])
 app.include_router(exam_router, prefix="/api", tags=["exam"])
 app.include_router(quiz_router, prefix="/api", tags=["quiz"])
+app.include_router(flashcards_router, prefix="/api")
+app.include_router(progress_router, prefix="/api")
+app.include_router(quickprep_router, prefix="/api")
 
 
 @app.get("/")
