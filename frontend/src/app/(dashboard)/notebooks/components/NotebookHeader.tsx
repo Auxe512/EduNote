@@ -11,6 +11,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { getDateLocale } from '@/lib/utils/date-locale'
 import { InlineEdit } from '@/components/common/InlineEdit'
 import { useTranslation } from '@/lib/hooks/use-translation'
+import { EduNoteNav } from '@/components/edunote/EduNoteNav'
 
 interface NotebookHeaderProps {
   notebook: NotebookResponse
@@ -123,6 +124,8 @@ export function NotebookHeader({ notebook }: NotebookHeaderProps) {
         notebookName={notebook.name}
         redirectAfterDelete
       />
+
+      <EduNoteNav notebookRawId={notebook.id.replace(/^notebook:/, '')} />
     </>
   )
 }
