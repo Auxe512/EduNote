@@ -33,6 +33,19 @@ export function trimContext(context: NotebookContext): NotebookContext {
   return { sources, notes: context.notes ?? [] };
 }
 
+// The base chat prompt makes the model cite documents like [source:abc123].
+// That breaks the "confused student" illusion, so strip those citations from
+// what we display. Ordinary brackets (e.g. arr[0]) are left intact.
+export function stripCitations(text: string): string {
+  return text
+    .replace(
+      /\s*\[(?:source|note|insight|exam_topic|flashcard|question)\s*:\s*[\w-]+\]/gi,
+      "",
+    )
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 export function FeynmanChat({ notebookId }: { notebookId: string }) {
   const { sources } = useNotebookSources(notebookId);
   const [topic, setTopic] = useState("");
@@ -122,7 +135,7 @@ export function FeynmanChat({ notebookId }: { notebookId: string }) {
       const allMessages: Array<{ type: string; content: string }> = res.data.messages || [];
       const lastAi = [...allMessages].reverse().find(m => m.type === "ai");
       if (lastAi) {
-        setMessages(prev => [...prev, { role: "ai", content: lastAi.content }]);
+        setMessages(prev => [...prev, { role: "ai", content: stripCitations(lastAi.content) }]);
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "傳送失敗");
