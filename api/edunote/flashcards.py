@@ -31,16 +31,16 @@ async def generate_flashcards(notebook_id: str):
         return {"message": "Flashcards already exist", "generated": 0}
 
     notes_rows = await repo_query(
-        "SELECT note.content as content FROM (SELECT in AS note FROM artifact WHERE out=$nb FETCH note)",
+        "SELECT note.content as content FROM (SELECT in AS note FROM artifact WHERE out=type::thing($nb) FETCH note)",
         {"nb": notebook_id}
     )
     if not notes_rows:
         raise HTTPException(404, "No notes found in notebook")
 
-    notes_text = "\n\n".join(r.get("content", "") for r in notes_rows)[:12000]
+    notes_text = "\n\n".join(r.get("content", "") for r in notes_rows)[:4000]
 
     topics_rows = await repo_query(
-        "SELECT topic FROM exam_topic WHERE notebook_id=$nb ORDER BY count DESC LIMIT 8",
+        "SELECT topic, `count` FROM exam_topic WHERE notebook_id=$nb ORDER BY `count` DESC LIMIT 8",
         {"nb": notebook_id}
     )
     topic_hint = ""
@@ -50,11 +50,13 @@ async def generate_flashcards(notebook_id: str):
 
     cards_raw = await groq.call_json(
         CARD_SYSTEM,
-        f"Notes:\n{notes_text}{topic_hint}\n\nGenerate 20 flashcards."
+        f"Notes:\n{notes_text}{topic_hint}\n\nGenerate exactly 8 flashcards. Return ONLY the JSON array, no other text."
     )
+    if not isinstance(cards_raw, list):
+        raise HTTPException(500, "AI returned invalid format")
 
     saved = []
-    for c in cards_raw[:20]:
+    for c in cards_raw[:10]:
         card = Flashcard(
             notebook_id=notebook_id,
             front=c["front"],

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 interface Question { id: string; question: string; options: string[]; correct: string; }
@@ -8,35 +8,44 @@ export function QuizPlayer({ notebookId, userId }: { notebookId: string; userId:
   const router = useRouter();
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [bankCount, setBankCount] = useState<number | null>(null);
   const [current, setCurrent] = useState(0);
   const [chosen, setChosen] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ correct: boolean; answer: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
-  async function generateQuestions() {
-    setGenerating(true);
-    const res = await fetch(`/api/edunote/quiz/generate/${notebookId}`, { method: "POST" });
+  useEffect(() => { checkBank(); }, []);
+
+  async function checkBank() {
+    const res = await fetch(`/api/edunote/quiz/questions/${notebookId}`);
     const data = await res.json();
+    setBankCount(Array.isArray(data) ? data.length : 0);
+  }
+
+  async function generateMore() {
+    setGenerating(true);
+    await fetch(`/api/edunote/quiz/generate/${notebookId}`, { method: "POST" });
+    await checkBank();
     setGenerating(false);
-    return data;
   }
 
   async function startQuiz() {
     setLoading(true);
-    // Check if questions exist, generate if not
-    const bankRes = await fetch(`/api/edunote/quiz/questions/${notebookId}`);
-    const bank = await bankRes.json();
-    if (bank.length === 0) {
-      await generateQuestions();
-    }
+    if (bankCount === 0) await generateMore();
 
     const res = await fetch(`/api/edunote/quiz/start/${notebookId}?user_id=${userId}`, { method: "POST" });
     if (!res.ok) { setLoading(false); return; }
     const data = await res.json();
     setAttemptId(data.attempt_id);
 
-    // Fetch full question objects
+    // Record study session (B3 fix)
+    fetch(`/api/edunote/progress/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, notebook_id: notebookId, activity_type: "quiz" }),
+    }).catch(() => {});
+
     const allRes = await fetch(`/api/edunote/quiz/questions/${notebookId}`);
     const allQ: Question[] = await allRes.json();
     const sampled = data.question_ids
@@ -62,7 +71,7 @@ export function QuizPlayer({ notebookId, userId }: { notebookId: string; userId:
     setFeedback(null); setChosen(null);
     if (current + 1 >= questions.length) {
       await fetch(`/api/edunote/quiz/attempt/${attemptId}/complete`, { method: "POST" });
-      router.push(`/quiz/${attemptId}/result`);
+      router.push(`/quiz/${encodeURIComponent(attemptId!)}/result`);
     } else {
       setCurrent(c => c + 1);
     }
@@ -71,10 +80,19 @@ export function QuizPlayer({ notebookId, userId }: { notebookId: string; userId:
   if (!attemptId) return (
     <div className="p-4 space-y-4">
       <h2 className="text-xl font-bold">✎ 測驗練習</h2>
+      {bankCount !== null && (
+        <p className="text-sm text-gray-500">題庫：{bankCount} 題</p>
+      )}
       <button onClick={startQuiz} disabled={loading || generating}
         className="bg-green-500 text-white px-6 py-3 rounded-lg text-lg hover:bg-green-600 disabled:opacity-50">
-        {loading ? "載入題目中..." : generating ? "生成題目中..." : "開始測驗（10 題）"}
+        {loading ? "載入中..." : generating ? "生成題目中..." : "開始測驗（隨機 5 題）"}
       </button>
+      {bankCount !== null && bankCount < 25 && (
+        <button onClick={generateMore} disabled={generating}
+          className="block text-sm text-indigo-500 hover:text-indigo-700 disabled:opacity-50">
+          {generating ? "生成中..." : `＋ 補充更多題目（目前 ${bankCount}/25）`}
+        </button>
+      )}
     </div>
   );
 

@@ -27,18 +27,24 @@ async def record_session(req: SessionRequest):
 @router.get("/{notebook_id}/{user_id}")
 async def get_progress(notebook_id: str, user_id: str):
     total_notes_rows = await repo_query(
-        "SELECT count() FROM (SELECT in AS note FROM artifact WHERE out=$nb FETCH note) GROUP ALL",
+        "SELECT count() FROM (SELECT in AS note FROM artifact WHERE out=type::thing($nb) FETCH note) GROUP ALL",
         {"nb": notebook_id}
     )
     total = total_notes_rows[0].get("count", 0) if total_notes_rows else 0
 
-    read_notes = await repo_query(
+    activity_rows = await repo_query(
         "SELECT count() FROM study_session "
-        "WHERE user_id=$uid AND notebook_id=$nb AND activity_type='note' GROUP ALL",
+        "WHERE user_id=$uid AND notebook_id=$nb GROUP ALL",
         {"uid": user_id, "nb": notebook_id}
     )
-    read = read_notes[0].get("count", 0) if read_notes else 0
-    completion_rate = round(read / total * 100) if total > 0 else 0
+    activity_count = activity_rows[0].get("count", 0) if activity_rows else 0
+    if total > 0:
+        completion_rate = min(100, round(activity_count / total * 100))
+    elif activity_count > 0:
+        completion_rate = min(100, activity_count * 20)  # 5 activities = 100%
+    else:
+        completion_rate = 0
+    read = min(activity_count, total) if total > 0 else activity_count
 
     attempts = await repo_query(
         "SELECT score FROM quiz_attempt "

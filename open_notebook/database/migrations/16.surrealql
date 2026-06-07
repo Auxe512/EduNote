@@ -1,0 +1,14 @@
+DEFINE FIELD OVERWRITE notebook_id ON TABLE exam_paper TYPE string;
+DEFINE FIELD OVERWRITE notebook_id ON TABLE exam_topic TYPE string;
+DEFINE FIELD OVERWRITE exam_paper_id ON TABLE exam_topic TYPE string;
+DEFINE FIELD OVERWRITE notebook_id ON TABLE question TYPE string;
+DEFINE FIELD OVERWRITE notebook_id ON TABLE quiz_attempt TYPE string;
+DEFINE FIELD OVERWRITE user_id ON TABLE quiz_attempt TYPE string;
+DEFINE FIELD OVERWRITE question_ids ON TABLE quiz_attempt TYPE array<string>;
+DEFINE FIELD OVERWRITE question_id ON TABLE answer_record TYPE string;
+DEFINE FIELD OVERWRITE attempt_id ON TABLE answer_record TYPE string;
+DEFINE FIELD OVERWRITE notebook_id ON TABLE flashcard TYPE string;
+DEFINE FIELD OVERWRITE notebook_id ON TABLE flashcard_review TYPE string;
+DEFINE FIELD OVERWRITE flashcard_id ON TABLE flashcard_review TYPE string;
+DEFINE FIELD OVERWRITE notebook_id ON TABLE study_session TYPE string;
+DEFINE FIELD OVERWRITE user_id ON TABLE study_session TYPE string;

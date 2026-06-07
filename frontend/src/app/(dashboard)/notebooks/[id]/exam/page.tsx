@@ -15,7 +15,7 @@ export default function ExamPage() {
         <aside className="w-56 border-r p-4 shrink-0 overflow-y-auto">
           <EduNoteNav notebookRawId={rawId} />
         </aside>
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto bg-white text-gray-900">
           <ExamAnalyzer notebookId={`notebook:${rawId}`} />
         </main>
       </div>

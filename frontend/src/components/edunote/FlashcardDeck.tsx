@@ -16,6 +16,14 @@ export function FlashcardDeck({ notebookId, userId }: { notebookId: string; user
   async function loadCards() {
     const res = await fetch(`/api/edunote/flashcards/${notebookId}`);
     const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      // Record study session when user starts reviewing flashcards (B3 fix)
+      fetch(`/api/edunote/progress/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, notebook_id: notebookId, activity_type: "flashcard" }),
+      }).catch(() => {});
+    }
     setCards(data);
   }
 
@@ -67,7 +75,7 @@ export function FlashcardDeck({ notebookId, userId }: { notebookId: string; user
         <span className="text-orange-500 text-xs">{card.topic}</span>
       </div>
       <div onClick={() => setFlipped(f => !f)}
-        className="cursor-pointer border-2 rounded-xl p-8 min-h-40 flex items-center justify-center text-center bg-white hover:shadow-lg transition-shadow">
+        className="cursor-pointer border-2 rounded-xl p-8 min-h-40 flex items-center justify-center text-center bg-white text-gray-900 hover:shadow-lg transition-shadow">
         {flipped
           ? <p className="text-lg text-green-700">{card.back}</p>
           : <p className="text-lg font-medium">{card.front}</p>}

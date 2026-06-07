@@ -1,0 +1,15 @@
+-- Rollback: restore record<X> type constraints
+DEFINE FIELD notebook_id ON TABLE exam_paper TYPE record<notebook>;
+DEFINE FIELD notebook_id ON TABLE exam_topic TYPE record<notebook>;
+DEFINE FIELD exam_paper_id ON TABLE exam_topic TYPE record<exam_paper>;
+DEFINE FIELD notebook_id ON TABLE question TYPE record<notebook>;
+DEFINE FIELD notebook_id ON TABLE quiz_attempt TYPE record<notebook>;
+DEFINE FIELD user_id ON TABLE quiz_attempt TYPE record<user>;
+DEFINE FIELD question_ids ON TABLE quiz_attempt TYPE array<record<question>>;
+DEFINE FIELD question_id ON TABLE answer_record TYPE record<question>;
+DEFINE FIELD attempt_id ON TABLE answer_record TYPE record<quiz_attempt>;
+DEFINE FIELD notebook_id ON TABLE flashcard TYPE record<notebook>;
+DEFINE FIELD notebook_id ON TABLE flashcard_review TYPE record<notebook>;
+DEFINE FIELD flashcard_id ON TABLE flashcard_review TYPE record<flashcard>;
+DEFINE FIELD notebook_id ON TABLE study_session TYPE record<notebook>;
+DEFINE FIELD user_id ON TABLE study_session TYPE record<user>;

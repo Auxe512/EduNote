@@ -1,20 +1,23 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import apiClient from "@/lib/api/client";
+import { useNotebookSources } from "@/lib/hooks/use-sources";
 
 interface Message {
   role: "user" | "ai";
   content: string;
 }
 
-const FEYNMAN_SYSTEM_PREFIX = `你是一個完全不懂這個主題的困惑學生。
-請用繁體中文，以學生的視角提出困惑的問題，假裝你什麼都不懂。
-當使用者解釋時，繼續追問更深的問題，直到你「真正理解」為止。
-不要超出學生角色。`;
+interface NotebookContext {
+  sources: Array<Record<string, unknown>>;
+  notes: Array<Record<string, unknown>>;
+}
 
 export function FeynmanChat({ notebookId }: { notebookId: string }) {
+  const { sources } = useNotebookSources(notebookId);
   const [topic, setTopic] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [notebookContext, setNotebookContext] = useState<NotebookContext | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,16 +36,29 @@ export function FeynmanChat({ notebookId }: { notebookId: string }) {
     try {
       // Create a new chat session for this notebook
       const sessionRes = await apiClient.post("/chat/sessions", {
-        notebook_id: `notebook:${notebookId}`,
+        notebook_id: notebookId,
         title: `費曼練習：${topic}`,
       });
       const newSessionId: string = sessionRes.data.id;
       setSessionId(newSessionId);
 
-      // Send the opening message as the AI (we simulate it locally, then the real AI continues)
+      // Build notebook context: include all sources as 'full content'
+      if (sources.length > 0) {
+        const sourcesConfig: Record<string, string> = {};
+        sources.forEach(s => { sourcesConfig[s.id] = "full content"; });
+        try {
+          const ctxRes = await apiClient.post("/chat/context", {
+            notebook_id: notebookId,
+            context_config: { sources: sourcesConfig, notes: {} },
+          });
+          setNotebookContext(ctxRes.data.context);
+        } catch {
+          // Context build failed — continue without notebook content
+        }
+      }
+
       const openingMsg = `你好！我聽說你要教我「${topic}」？我完全不懂，可以從頭解釋給我聽嗎？`;
-      const initialMessages: Message[] = [{ role: "ai", content: openingMsg }];
-      setMessages(initialMessages);
+      setMessages([{ role: "ai", content: openingMsg }]);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "無法建立對話");
     } finally {
@@ -58,19 +74,20 @@ export function FeynmanChat({ notebookId }: { notebookId: string }) {
     setMessages(prev => [...prev, { role: "user", content: userMsg }]);
 
     try {
-      const feynmanContext = `${FEYNMAN_SYSTEM_PREFIX}\n\n主題：${topic}\n\n請繼續扮演困惑的學生，對使用者的解釋提出更多問題。`;
+      const feynmanInstruction = `你是一個完全不懂「${topic}」的困惑學生。
+請用繁體中文，以學生的視角提出困惑的問題，假裝你什麼都不懂。
+筆記本中有關於這個主題的資料，請根據這些資料提出更具體的追問。
+當使用者解釋時，繼續追問更深的問題，直到你「真正理解」為止。
+不要超出學生角色，不要直接給出答案或解釋。`;
 
       const res = await apiClient.post("/chat/execute", {
         session_id: sessionId,
         message: userMsg,
         context: {
-          sources: [],
+          sources: notebookContext?.sources ?? [],
           notes: [
-            {
-              id: "feynman-context",
-              content: feynmanContext,
-              title: "費曼模式指示",
-            },
+            ...(notebookContext?.notes ?? []),
+            { id: "feynman-system", content: feynmanInstruction, title: "費曼模式指示" },
           ],
         },
       });
@@ -104,7 +121,7 @@ export function FeynmanChat({ notebookId }: { notebookId: string }) {
         </p>
         <div className="flex gap-2">
           <input
-            className="border rounded px-3 py-2 flex-1"
+            className="border rounded px-3 py-2 flex-1 bg-white text-gray-900"
             placeholder="輸入你想練習教學的主題（如：牛頓第二定律）"
             value={topic}
             onChange={e => setTopic(e.target.value)}
@@ -135,7 +152,7 @@ export function FeynmanChat({ notebookId }: { notebookId: string }) {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-3 mb-4 border rounded-lg p-3 bg-gray-50">
+      <div className="flex-1 overflow-y-auto space-y-3 mb-4 border rounded-lg p-3 bg-gray-50 text-gray-900">
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg text-sm ${
@@ -150,7 +167,7 @@ export function FeynmanChat({ notebookId }: { notebookId: string }) {
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-white border rounded-lg px-4 py-2 text-sm text-gray-400">
+            <div className="bg-white border rounded-lg px-4 py-2 text-sm text-gray-500">
               思考中...
             </div>
           </div>
@@ -162,7 +179,7 @@ export function FeynmanChat({ notebookId }: { notebookId: string }) {
 
       <div className="flex gap-2">
         <textarea
-          className="border rounded px-3 py-2 flex-1 resize-none text-sm"
+          className="border rounded px-3 py-2 flex-1 resize-none text-sm bg-white text-gray-900"
           rows={2}
           placeholder="解釋給學生聽... (Enter 送出，Shift+Enter 換行)"
           value={input}

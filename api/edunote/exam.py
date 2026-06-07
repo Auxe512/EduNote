@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from open_notebook.domain.edunote import ExamPaper, ExamTopic
+from open_notebook.domain.notebook import Source
+from open_notebook.exceptions import NotFoundError
 from open_notebook.services.groq_service import GroqService
 from open_notebook.database.repository import repo_query
 
@@ -19,20 +21,29 @@ class AnalyzeRequest(BaseModel):
 
 @router.post("/analyze")
 async def analyze_exam(req: AnalyzeRequest):
-    rows = await repo_query(
-        "SELECT * FROM source WHERE id=$id",
-        {"id": req.source_id}
+    # Prevent re-analyzing the same source
+    existing_paper = await repo_query(
+        "SELECT id FROM exam_paper WHERE notebook_id=$nb AND file_name=$sid",
+        {"nb": req.notebook_id, "sid": req.source_id}
     )
-    if not rows:
+    if existing_paper:
+        existing_topics = await repo_query(
+            "SELECT * FROM exam_topic WHERE exam_paper_id=$pid ORDER BY `count` DESC",
+            {"pid": str(existing_paper[0]["id"])}
+        )
+        return {"exam_paper_id": str(existing_paper[0]["id"]), "topics": existing_topics, "cached": True}
+
+    try:
+        source = await Source.get(req.source_id)
+    except NotFoundError:
         raise HTTPException(404, "Source not found")
 
-    # Source stores text content in full_text field
-    source = rows[0]
-    exam_text = source.get("full_text") or ""
+    exam_text = source.full_text or ""
     if not exam_text:
-        raise HTTPException(404, "Source has no text content")
+        raise HTTPException(422, "Source has no text content — please upload a text-layer PDF")
 
-    exam_text = exam_text[:12000]
+    # Groq free tier: 6000 TPM limit. ~4000 chars ≈ 4500 tokens for mixed Chinese/English
+    exam_text = exam_text[:4000]
 
     topics_raw = await groq.call_json(
         ANALYZE_SYSTEM,
@@ -60,10 +71,17 @@ async def analyze_exam(req: AnalyzeRequest):
     }
 
 
+@router.delete("/topics/{notebook_id}")
+async def clear_topics(notebook_id: str):
+    await repo_query("DELETE exam_topic WHERE notebook_id=$nb", {"nb": notebook_id})
+    await repo_query("DELETE exam_paper WHERE notebook_id=$nb", {"nb": notebook_id})
+    return {"cleared": True}
+
+
 @router.get("/topics/{notebook_id}")
 async def get_topics(notebook_id: str):
     rows = await repo_query(
-        "SELECT * FROM exam_topic WHERE notebook_id=$nb ORDER BY count DESC",
+        "SELECT * FROM exam_topic WHERE notebook_id=$nb ORDER BY `count` DESC",
         {"nb": notebook_id}
     )
     return rows or []

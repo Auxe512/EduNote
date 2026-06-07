@@ -1,0 +1,8 @@
+REMOVE TABLE IF EXISTS study_session;
+REMOVE TABLE IF EXISTS flashcard_review;
+REMOVE TABLE IF EXISTS flashcard;
+REMOVE TABLE IF EXISTS answer_record;
+REMOVE TABLE IF EXISTS quiz_attempt;
+REMOVE TABLE IF EXISTS question;
+REMOVE TABLE IF EXISTS exam_topic;
+REMOVE TABLE IF EXISTS exam_paper;

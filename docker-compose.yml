@@ -20,7 +20,7 @@ services:
     environment:
       # REQUIRED: Change this to your own secret string
       # This encrypts your API keys in the database
-      - OPEN_NOTEBOOK_ENCRYPTION_KEY=change-me-to-a-secret-string
+      - OPEN_NOTEBOOK_ENCRYPTION_KEY=edunote-secret-2026
 
       # Database connection (default values - no need to change)
       - SURREAL_URL=ws://surrealdb:8000/rpc
@@ -28,8 +28,16 @@ services:
       - SURREAL_PASSWORD=root
       - SURREAL_NAMESPACE=open_notebook
       - SURREAL_DATABASE=open_notebook
+      - GROQ_API_KEY=${GROQ_API_KEY}
     volumes:
       - ./notebook_data:/app/data
+      - ./api:/app/api
+      - ./open_notebook:/app/open_notebook
+      - ./tests:/app/tests
+      - ./scripts:/app/scripts
+      - ./migrations:/app/migrations
+      - ./frontend/.next:/app/frontend/.next
+      - ./frontend/.next/standalone/server.js:/app/frontend/server.js
     depends_on:
       - surrealdb
     restart: always
