@@ -10,6 +10,54 @@ This file provides architectural guidance for contributors working on Open Noteb
 
 ---
 
+## EduNote Fork — Exam-Prep Layer (READ FIRST)
+
+This repo is the **EduNote AI** fork: Open Notebook plus an exam-oriented study layer for a
+classroom demo. Most active work happens in the EduNote modules, not upstream code.
+
+**6 EduNote modules** — backend in `api/edunote/`, frontend in `frontend/src/components/edunote/`,
+domain model in `open_notebook/domain/edunote.py`:
+QuickPrep (`quickprep.py`), ExamAnalyzer (`exam.py`), Quiz (`quiz.py`), Flashcards
+(`flashcards.py`), Feynman (uses upstream chat system + `FeynmanChat.tsx`), Progress (`progress.py`).
+EduNote tables: `study_session`, `quiz_attempt`, `answer_record`, `flashcard`,
+`flashcard_review`, `exam_topic`, `exam_paper`.
+
+### EduNote gotchas (each cost a debugging session)
+
+- **LLM is Groq, not the multi-provider stack.** `llama-3.1-8b-instant` for generation,
+  `llama-3.3-70b-versatile` for chat. `GROQ_API_KEY` lives in `.env` — **NEVER commit it.**
+  `groq_service.py` lazy-inits so a missing key doesn't crash API import.
+- **Chat model has a ~12k TPM free-tier limit.** Sending several full sources as Feynman context
+  → Groq 413 → HTTP 500. `FeynmanChat.tsx` `trimContext()` caps combined source text to
+  `FEYNMAN_CONTEXT_CHAR_BUDGET` (6000 chars) and drops insights.
+- **Generation must read BOTH notes and sources.** Uploaded files become `source` records
+  (`reference` relation), not `note` records (`artifact` relation). Quiz/flashcard generation uses
+  `api/edunote/content.py::gather_notebook_text()` which reads both — otherwise uploaded lectures
+  are invisible and QuickPrep reports "no notes found".
+- **EduNote FK fields are `string`, not `record<>`.** `flashcard_review.user_id` and
+  `study_session.note_id` are plain strings (per-user IDs from `localStorage:edunote:student_id`).
+  Migration 17 fixed this; stat queries resolve child rows by `... IN $ids`, not string-FK traversal.
+- **`Notebook.delete()` cascades EduNote content** via `_delete_edunote_content()` (8 tables) —
+  needed because EduNote rows would otherwise orphan.
+- **AI-returns-non-list → return 502** ("AI returned invalid format"), not a bare 500.
+- **OCR is not available in the container** (no docling/tesseract). Only text-layer sources work
+  (text PDFs, pasted text, URLs, YouTube captions). Scanned PDFs must be OCR'd on the host first.
+- **Feynman persona**: the prompt alone leaks citations like `[source:abc]`; `stripCitations()`
+  post-processes the displayed text to remove them (reliable, doesn't fight the model).
+
+### Running EduNote things
+
+- **Tests run inside the container** (pytest is a dev dep, not in the prod image):
+  `docker-compose exec -T open_notebook sh -c 'cd /app && uv run --no-sync --with pytest --with pytest-asyncio pytest tests/...'`.
+  `docker-compose` has a hyphen here. Frontend unit tests: `npx vitest run` in `frontend/`.
+- **Frontend is standalone Next.js.** After `npm run build` you must
+  `cp -r public .next/standalone/` and `cp -r .next/static .next/standalone/.next/`, then restart
+  `PORT=3000 node .next/standalone/server.js` — otherwise logo/static chunks 404.
+- **Ports**: frontend 3000, API 5055, SurrealDB 8000 (rocksdb).
+- **Demo deploy**: `cloudflared tunnel --url http://localhost:3000` (URL changes each restart).
+
+---
+
 ## Three-Tier Architecture
 
 ```
