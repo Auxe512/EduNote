@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from open_notebook.domain.edunote import Flashcard, FlashcardReview
 from open_notebook.services.groq_service import GroqService
 from open_notebook.database.repository import repo_query
+from api.edunote.content import gather_notebook_text
 
 router = APIRouter(prefix="/edunote/flashcards", tags=["flashcards"])
 groq = GroqService()
@@ -30,14 +31,9 @@ async def generate_flashcards(notebook_id: str):
     if existing and existing[0].get("count", 0) >= 10:
         return {"message": "Flashcards already exist", "generated": 0}
 
-    notes_rows = await repo_query(
-        "SELECT note.content as content FROM (SELECT in AS note FROM artifact WHERE out=type::thing($nb) FETCH note)",
-        {"nb": notebook_id}
-    )
-    if not notes_rows:
-        raise HTTPException(404, "No notes found in notebook")
-
-    notes_text = "\n\n".join(r.get("content", "") for r in notes_rows)[:4000]
+    notes_text = await gather_notebook_text(notebook_id)
+    if not notes_text.strip():
+        raise HTTPException(404, "No notes or sources found in notebook")
 
     topics_rows = await repo_query(
         "SELECT topic, `count` FROM exam_topic WHERE notebook_id=$nb ORDER BY `count` DESC LIMIT 8",

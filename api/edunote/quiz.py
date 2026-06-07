@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from open_notebook.domain.edunote import Question, QuizAttempt, AnswerRecord
 from open_notebook.services.groq_service import GroqService
 from open_notebook.database.repository import repo_query
+from api.edunote.content import gather_notebook_text
 
 router = APIRouter(prefix="/edunote/quiz", tags=["quiz"])
 groq = GroqService()
@@ -35,17 +36,10 @@ async def generate_questions(notebook_id: str):
     if existing and existing[0].get("count", 0) >= 25:
         return {"message": "Question bank is full", "generated": 0}
 
-    # Notes relate to notebooks via the artifact RELATION table (FROM note TO notebook)
-    notes_rows = await repo_query(
-        "SELECT note.content as content FROM (SELECT in AS note FROM artifact WHERE out=type::thing($nb) FETCH note)",
-        {"nb": notebook_id}
-    )
-    if not notes_rows:
-        raise HTTPException(404, "No notes found in this notebook")
-
-    notes_text = "\n\n".join(r.get("content", "") for r in notes_rows if r.get("content"))[:4000]
+    # Read from both uploaded sources and notes in the notebook.
+    notes_text = await gather_notebook_text(notebook_id)
     if not notes_text.strip():
-        raise HTTPException(404, "No notes found in this notebook")
+        raise HTTPException(404, "No notes or sources found in this notebook")
 
     topics_rows = await repo_query(
         "SELECT topic, `count` FROM exam_topic WHERE notebook_id=$nb ORDER BY `count` DESC LIMIT 10",

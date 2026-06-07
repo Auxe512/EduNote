@@ -202,11 +202,11 @@ async def test_quiz_generate_saves_at_most_10():
         for i in range(15)
     ]
     repo = AsyncMock(side_effect=[
-        [{"count": 0}],                 # existing bank count
-        [{"content": "some study notes"}],  # notes_rows
-        [],                             # topics_rows
+        [{"count": 0}],   # existing bank count
+        [],               # topics_rows
     ])
     with patch("api.edunote.quiz.repo_query", new=repo), \
+         patch("api.edunote.quiz.gather_notebook_text", new=AsyncMock(return_value="some study notes")), \
          patch("api.edunote.quiz.groq.call_json", new=AsyncMock(return_value=many)), \
          patch("api.edunote.quiz.Question", side_effect=lambda **kw: SimpleNamespace(save=AsyncMock(), **kw)):
         async with _client() as client:
@@ -220,11 +220,11 @@ async def test_flashcards_generate_saves_at_most_8():
     """Prompt asks for 8 flashcards; cap at 8 even if the model returns more."""
     many = [{"front": f"F{i}", "back": "b", "topic": "T"} for i in range(12)]
     repo = AsyncMock(side_effect=[
-        [{"count": 0}],                 # existing count
-        [{"content": "some study notes"}],  # notes_rows
-        [],                             # topics_rows
+        [{"count": 0}],   # existing count
+        [],               # topics_rows
     ])
     with patch("api.edunote.flashcards.repo_query", new=repo), \
+         patch("api.edunote.flashcards.gather_notebook_text", new=AsyncMock(return_value="some study notes")), \
          patch("api.edunote.flashcards.groq.call_json", new=AsyncMock(return_value=many)), \
          patch("api.edunote.flashcards.Flashcard", side_effect=lambda **kw: SimpleNamespace(save=AsyncMock(), **kw)):
         async with _client() as client:
@@ -237,10 +237,10 @@ async def test_flashcards_generate_saves_at_most_8():
 async def test_quiz_generate_502_when_ai_returns_non_list():
     repo = AsyncMock(side_effect=[
         [{"count": 0}],
-        [{"content": "some study notes"}],
         [],
     ])
     with patch("api.edunote.quiz.repo_query", new=repo), \
+         patch("api.edunote.quiz.gather_notebook_text", new=AsyncMock(return_value="some study notes")), \
          patch("api.edunote.quiz.groq.call_json", new=AsyncMock(return_value={"nope": 1})):
         async with _client() as client:
             resp = await client.post("/api/edunote/quiz/generate/notebook:test")
@@ -252,10 +252,10 @@ async def test_quiz_generate_502_when_ai_returns_non_list():
 async def test_flashcards_generate_502_when_ai_returns_non_list():
     repo = AsyncMock(side_effect=[
         [{"count": 0}],
-        [{"content": "some study notes"}],
         [],
     ])
     with patch("api.edunote.flashcards.repo_query", new=repo), \
+         patch("api.edunote.flashcards.gather_notebook_text", new=AsyncMock(return_value="some study notes")), \
          patch("api.edunote.flashcards.groq.call_json", new=AsyncMock(return_value={"nope": 1})):
         async with _client() as client:
             resp = await client.post("/api/edunote/flashcards/generate/notebook:test")
