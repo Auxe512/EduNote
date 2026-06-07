@@ -27,9 +27,18 @@ EduNote tables: `study_session`, `quiz_attempt`, `answer_record`, `flashcard`,
 - **LLM is Groq, not the multi-provider stack.** `llama-3.1-8b-instant` for generation,
   `llama-3.3-70b-versatile` for chat. `GROQ_API_KEY` lives in `.env` — **NEVER commit it.**
   `groq_service.py` lazy-inits so a missing key doesn't crash API import.
-- **Chat model has a ~12k TPM free-tier limit.** Sending several full sources as Feynman context
-  → Groq 413 → HTTP 500. `FeynmanChat.tsx` `trimContext()` caps combined source text to
-  `FEYNMAN_CONTEXT_CHAR_BUDGET` (6000 chars) and drops insights.
+- **Groq free-tier rate limits are per-ORG (shared across all demo users), and TPM (tokens
+  per minute) is the real concurrency bottleneck — not context size.** Measured TPM:
+  `llama-4-scout-17b-16e-instruct` = 30000 (best, use this for chat), `llama-3.3-70b-versatile`
+  = 12000 (TPD only 100k — exhausts in a day), `llama-3.1-8b-instant` = 6000 (trap: the smaller
+  model has the *smallest* TPM). The demo chat/Feynman model is set via the DB record
+  `open_notebook:default_models.default_chat_model` (a DB setting, not code — re-set if DB is wiped).
+- **Feynman context is capped to keep requests cheap.** Each full-source context made requests
+  ~10k tokens → Groq 413 → HTTP 500. `FeynmanChat.tsx` `trimContext()` caps combined source text to
+  `FEYNMAN_CONTEXT_CHAR_BUDGET` (1500 chars) and drops insights. Chinese is ~1 token/char.
+- **Standalone JS chunk names are stable (not content-hashed).** After a frontend rebuild, browsers
+  that loaded the old build serve cached stale JS; fresh visitors get the new build fine. Hard-reload
+  / new profile to verify changes locally.
 - **Generation must read BOTH notes and sources.** Uploaded files become `source` records
   (`reference` relation), not `note` records (`artifact` relation). Quiz/flashcard generation uses
   `api/edunote/content.py::gather_notebook_text()` which reads both — otherwise uploaded lectures
