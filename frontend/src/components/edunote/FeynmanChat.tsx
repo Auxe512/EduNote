@@ -14,10 +14,12 @@ interface NotebookContext {
 }
 
 // Feynman chat sends the notebook content as context. The full text of several
-// sources can exceed Groq's per-minute token limit (~12k for the chat model),
-// causing 413/500 errors. Cap the combined source text and drop insights so the
-// request stays comfortably under the limit.
-export const FEYNMAN_CONTEXT_CHAR_BUDGET = 6000;
+// sources can exceed Groq's token limits, causing 413/500 errors — and on the
+// free tier every request also eats into a small daily token budget. The
+// confused-student persona only needs a little material to spot gaps, so keep
+// the context tight: cap the combined source text and drop insights. (Chinese
+// text is roughly one token per character, so ~1500 chars ≈ ~1500 tokens.)
+export const FEYNMAN_CONTEXT_CHAR_BUDGET = 1500;
 
 export function trimContext(context: NotebookContext): NotebookContext {
   let remaining = FEYNMAN_CONTEXT_CHAR_BUDGET;

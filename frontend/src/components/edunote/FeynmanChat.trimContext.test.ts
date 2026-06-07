@@ -17,9 +17,11 @@ describe("trimContext", () => {
       0,
     );
     expect(total).toBe(FEYNMAN_CONTEXT_CHAR_BUDGET);
-    // first source keeps its 5000, second is truncated to the remaining 1000
-    expect((trimmed.sources[0].full_text as string).length).toBe(5000);
-    expect((trimmed.sources[1].full_text as string).length).toBe(1000);
+    // first source fills the whole budget; nothing is left for the second
+    expect((trimmed.sources[0].full_text as string).length).toBe(
+      FEYNMAN_CONTEXT_CHAR_BUDGET,
+    );
+    expect((trimmed.sources[1].full_text as string).length).toBe(0);
   });
 
   it("drops insights to save tokens", () => {
