@@ -52,17 +52,34 @@ async def analyze_exam(req: AnalyzeRequest):
     if not isinstance(topics_raw, list):
         raise HTTPException(502, "AI returned invalid format")
 
+    # Validate every topic object BEFORE saving anything. Otherwise a malformed
+    # AI response (missing keys) raises mid-loop after paper.save(), leaving an
+    # exam_paper with zero topics that the cache guard above then treats as
+    # "already analyzed" forever — permanently breaking analysis for this source.
+    clean_topics = []
+    for t in topics_raw:
+        if not isinstance(t, dict) or not t.get("topic"):
+            continue
+        try:
+            count = int(t.get("count", 1))
+        except (TypeError, ValueError):
+            count = 1
+        clean_topics.append((str(t["topic"]), count, str(t.get("description", ""))))
+
+    if not clean_topics:
+        raise HTTPException(502, "AI returned no usable topics")
+
     paper = ExamPaper(notebook_id=req.notebook_id, file_name=req.source_id)
     await paper.save()
 
     saved_topics = []
-    for t in topics_raw:
+    for topic_name, topic_count, topic_desc in clean_topics:
         topic = ExamTopic(
             exam_paper_id=str(paper.id),
             notebook_id=req.notebook_id,
-            topic=t["topic"],
-            count=t["count"],
-            description=t.get("description", "")
+            topic=topic_name,
+            count=topic_count,
+            description=topic_desc
         )
         await topic.save()
         saved_topics.append(topic)

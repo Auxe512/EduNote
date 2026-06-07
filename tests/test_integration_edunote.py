@@ -8,7 +8,7 @@ the symbol with ``from ... import``, binding its own name.
 
 import pytest
 from types import SimpleNamespace
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from httpx import AsyncClient, ASGITransport
 
 from api.main import app
@@ -120,6 +120,55 @@ async def test_exam_analyze_fresh_generates_topics():
     assert {t["topic"] for t in body["topics"]} == {"Pipeline Hazards", "Cache"}
 
 
+@pytest.mark.asyncio
+async def test_exam_analyze_502_and_no_paper_saved_when_topics_malformed():
+    """AI returns a list but the objects lack the required 'topic' key -> 502,
+    and crucially NO exam_paper is persisted. Otherwise a saved paper with zero
+    topics makes the cache guard treat the source as 'already analyzed' forever,
+    permanently breaking analysis for that source."""
+    fake_source = SimpleNamespace(full_text="Q1 something about indexing.")
+    paper_factory = MagicMock()  # tracks whether ExamPaper was ever constructed
+    with patch("api.edunote.exam.repo_query", new=AsyncMock(return_value=[])), \
+         patch("api.edunote.exam.Source.get", new=AsyncMock(return_value=fake_source)), \
+         patch("api.edunote.exam.groq.call_json",
+               new=AsyncMock(return_value=[{"name": "x"}, {"frequency": 3}])), \
+         patch("api.edunote.exam.ExamPaper", paper_factory):
+        async with _client() as client:
+            resp = await client.post(
+                "/api/edunote/exam/analyze",
+                json={"notebook_id": "notebook:test", "source_id": "source:exam"},
+            )
+    assert resp.status_code == 502
+    paper_factory.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_exam_analyze_tolerates_missing_count():
+    """A topic object missing 'count' should default to 1, not crash with KeyError."""
+    fake_source = SimpleNamespace(full_text="Q1 indexing. Q2 joins.")
+
+    def make_paper(**kw):
+        return SimpleNamespace(id="exam_paper:new", save=AsyncMock(), **kw)
+
+    def make_topic(**kw):
+        return SimpleNamespace(save=AsyncMock(), **kw)
+
+    with patch("api.edunote.exam.repo_query", new=AsyncMock(return_value=[])), \
+         patch("api.edunote.exam.Source.get", new=AsyncMock(return_value=fake_source)), \
+         patch("api.edunote.exam.groq.call_json",
+               new=AsyncMock(return_value=[{"topic": "Indexing"}])), \
+         patch("api.edunote.exam.ExamPaper", side_effect=make_paper), \
+         patch("api.edunote.exam.ExamTopic", side_effect=make_topic):
+        async with _client() as client:
+            resp = await client.post(
+                "/api/edunote/exam/analyze",
+                json={"notebook_id": "notebook:test", "source_id": "source:exam"},
+            )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["topics"] == [{"topic": "Indexing", "count": 1, "description": ""}]
+
+
 # --------------------------------------------------------------------------- #
 # Progress                                                                     #
 # --------------------------------------------------------------------------- #
@@ -175,6 +224,29 @@ async def test_progress_completion_capped_at_100():
     assert data["completion_rate"] == 100   # capped, not 500
     assert data["read_notes"] == 2          # min(activity, total), not 10
     assert data["total_notes"] == 2
+
+
+@pytest.mark.asyncio
+async def test_progress_weak_topics_resolved_via_string_attempt_ids():
+    """Regression: answer_record.attempt_id is a plain string, so weak topics must
+    be computed by resolving attempt ids to strings then matching `IN $ids`. The
+    previous `attempt_id IN (SELECT id FROM quiz_attempt ...)` subquery compared
+    string vs RecordID and always returned [], leaving the panel permanently empty."""
+    repo = AsyncMock(side_effect=[
+        [{"count": 5}],                                    # total_notes
+        [{"count": 3}],                                    # activity_count
+        [{"score": 80}],                                   # quiz attempts (avg)
+        [],                                                # sessions (streak)
+        [{"id": "quiz_attempt:a1"}],                       # attempt_rows (resolve ids)
+        [{"topic": "Indexing", "total": 2, "wrong": 2},    # weak_rows (IN $ids)
+         {"topic": "SQL", "total": 4, "wrong": 1}],
+    ])
+    with patch("api.edunote.progress.repo_query", new=repo):
+        async with _client() as client:
+            resp = await client.get("/api/edunote/progress/notebook:test/user:test")
+    data = resp.json()
+    assert data["weak_topics"][0] == {"topic": "Indexing", "error_rate": 1.0}
+    assert {w["topic"] for w in data["weak_topics"]} == {"Indexing", "SQL"}
 
 
 # --------------------------------------------------------------------------- #

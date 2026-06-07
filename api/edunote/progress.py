@@ -61,19 +61,28 @@ async def get_progress(notebook_id: str, user_id: str):
     )
     streak = _compute_streak(sessions)
 
-    weak_rows = await repo_query(
-        "SELECT topic, count() as total, "
-        "math::sum(if is_correct then 0 else 1 end) as wrong "
-        "FROM answer_record WHERE attempt_id IN "
-        "(SELECT id FROM quiz_attempt WHERE user_id=$uid AND notebook_id=$nb) "
-        "GROUP BY topic",
+    # attempt_id is stored as a plain string, so an `IN (SELECT id FROM
+    # quiz_attempt ...)` subquery compares string vs RecordID and never matches.
+    # Resolve the attempt ids to strings first, then match with IN $ids.
+    attempt_rows = await repo_query(
+        "SELECT id FROM quiz_attempt WHERE user_id=$uid AND notebook_id=$nb",
         {"uid": user_id, "nb": notebook_id}
     )
-    weak_topics = [
-        {"topic": r["topic"], "error_rate": round(r["wrong"] / r["total"], 2)}
-        for r in (weak_rows or []) if r.get("total", 0) > 0
-    ]
-    weak_topics.sort(key=lambda x: x["error_rate"], reverse=True)
+    attempt_ids = [str(a["id"]) for a in attempt_rows]
+    weak_topics = []
+    if attempt_ids:
+        weak_rows = await repo_query(
+            "SELECT topic, count() as total, "
+            "math::sum(if is_correct then 0 else 1 end) as wrong "
+            "FROM answer_record WHERE attempt_id IN $ids "
+            "GROUP BY topic",
+            {"ids": attempt_ids}
+        )
+        weak_topics = [
+            {"topic": r["topic"], "error_rate": round(r["wrong"] / r["total"], 2)}
+            for r in (weak_rows or []) if r.get("total", 0) > 0
+        ]
+        weak_topics.sort(key=lambda x: x["error_rate"], reverse=True)
 
     return {
         "completion_rate": completion_rate,
