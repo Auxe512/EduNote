@@ -135,6 +135,35 @@ class Notebook(ObjectModel):
             logger.exception(e)
             raise DatabaseOperationError(e)
 
+    async def _delete_edunote_content(self, notebook_id_str: str) -> None:
+        """Remove EduNote artifacts tied to this notebook: questions, flashcards
+        and their reviews, exam analysis, quiz attempts and their answers, and
+        study sessions. Child tables (flashcard_review, answer_record) are keyed
+        by parent id stored as a string, so resolve those ids first."""
+        cards = await repo_query(
+            "SELECT id FROM flashcard WHERE notebook_id=$nb", {"nb": notebook_id_str}
+        )
+        card_ids = [str(c["id"]) for c in cards]
+        if card_ids:
+            await repo_query(
+                "DELETE flashcard_review WHERE flashcard_id IN $ids", {"ids": card_ids}
+            )
+
+        attempts = await repo_query(
+            "SELECT id FROM quiz_attempt WHERE notebook_id=$nb", {"nb": notebook_id_str}
+        )
+        attempt_ids = [str(a["id"]) for a in attempts]
+        if attempt_ids:
+            await repo_query(
+                "DELETE answer_record WHERE attempt_id IN $ids", {"ids": attempt_ids}
+            )
+
+        for table in ("question", "flashcard", "exam_topic", "exam_paper",
+                      "quiz_attempt", "study_session"):
+            await repo_query(
+                f"DELETE {table} WHERE notebook_id=$nb", {"nb": notebook_id_str}
+            )
+
     async def delete(self, delete_exclusive_sources: bool = False) -> Dict[str, int]:
         """
         Delete notebook with cascade deletion of notes and optional source deletion.
@@ -167,6 +196,10 @@ class Notebook(ObjectModel):
                 "DELETE artifact WHERE out = $notebook_id",
                 {"notebook_id": notebook_id},
             )
+
+            # Cascade EduNote study artifacts (this fork's tables keyed by the
+            # notebook id as a string), otherwise they linger as orphans.
+            await self._delete_edunote_content(str(self.id))
 
             # 2. Handle sources
             if delete_exclusive_sources:
