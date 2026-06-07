@@ -13,6 +13,26 @@ interface NotebookContext {
   notes: Array<Record<string, unknown>>;
 }
 
+// Feynman chat sends the notebook content as context. The full text of several
+// sources can exceed Groq's per-minute token limit (~12k for the chat model),
+// causing 413/500 errors. Cap the combined source text and drop insights so the
+// request stays comfortably under the limit.
+export const FEYNMAN_CONTEXT_CHAR_BUDGET = 6000;
+
+export function trimContext(context: NotebookContext): NotebookContext {
+  let remaining = FEYNMAN_CONTEXT_CHAR_BUDGET;
+  const sources = (context.sources ?? []).map((s) => {
+    const src: Record<string, unknown> = { ...s, insights: [] };
+    if (typeof src.full_text === "string") {
+      const take = Math.max(0, Math.min(src.full_text.length, remaining));
+      src.full_text = src.full_text.slice(0, take);
+      remaining -= take;
+    }
+    return src;
+  });
+  return { sources, notes: context.notes ?? [] };
+}
+
 export function FeynmanChat({ notebookId }: { notebookId: string }) {
   const { sources } = useNotebookSources(notebookId);
   const [topic, setTopic] = useState("");
@@ -51,7 +71,7 @@ export function FeynmanChat({ notebookId }: { notebookId: string }) {
             notebook_id: notebookId,
             context_config: { sources: sourcesConfig, notes: {} },
           });
-          setNotebookContext(ctxRes.data.context);
+          setNotebookContext(trimContext(ctxRes.data.context));
         } catch {
           // Context build failed — continue without notebook content
         }
