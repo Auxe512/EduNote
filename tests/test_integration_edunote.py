@@ -77,6 +77,23 @@ async def test_exam_analyze_422_when_source_has_no_text():
 
 
 @pytest.mark.asyncio
+async def test_exam_analyze_502_when_ai_returns_non_list():
+    """If the LLM returns a dict/string instead of a topic array, fail cleanly
+    with a clear message instead of crashing with a generic 500."""
+    fake_source = SimpleNamespace(full_text="Q1 pipeline. Q2 cache.")
+    with patch("api.edunote.exam.repo_query", new=AsyncMock(return_value=[])), \
+         patch("api.edunote.exam.Source.get", new=AsyncMock(return_value=fake_source)), \
+         patch("api.edunote.exam.groq.call_json", new=AsyncMock(return_value={"oops": "not a list"})):
+        async with _client() as client:
+            resp = await client.post(
+                "/api/edunote/exam/analyze",
+                json={"notebook_id": "notebook:test", "source_id": "source:x"},
+            )
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "AI returned invalid format"
+
+
+@pytest.mark.asyncio
 async def test_exam_analyze_fresh_generates_topics():
     """Full happy path: source text -> AI topics -> persisted -> returned."""
     fake_source = SimpleNamespace(full_text="Q1 pipeline hazards. Q2 cache mapping.")
@@ -122,6 +139,26 @@ async def test_progress_zero_state():
 
 
 @pytest.mark.asyncio
+async def test_progress_read_notes_never_exceeds_total():
+    """When a notebook has no notes yet, read_notes must show 0 (not the raw
+    activity count), so the dashboard never displays 'read 4 / 0'."""
+    repo = AsyncMock(side_effect=[
+        [{"count": 0}],    # total_notes = 0
+        [{"count": 4}],    # activity_count = 4
+        [],                # attempts
+        [],                # sessions
+        [],                # weak_rows
+    ])
+    with patch("api.edunote.progress.repo_query", new=repo):
+        async with _client() as client:
+            resp = await client.get("/api/edunote/progress/notebook:test/user:test")
+    data = resp.json()
+    assert data["total_notes"] == 0
+    assert data["read_notes"] == 0
+    assert data["completion_rate"] == 80  # fallback: 4 activities * 20, capped at 100
+
+
+@pytest.mark.asyncio
 async def test_progress_completion_capped_at_100():
     """Regression: more activities than notes must not produce >100% or read>total."""
     repo = AsyncMock(side_effect=[
@@ -154,6 +191,76 @@ async def test_quiz_generate_skips_when_bank_full():
     assert resp.status_code == 200
     assert resp.json()["generated"] == 0
     groq_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_quiz_generate_saves_at_most_10():
+    """Prompt asks for 10 questions; even if the model over-delivers, we cap at 10."""
+    many = [
+        {"question": f"Q{i}", "options": ["A) a", "B) b", "C) c", "D) d"],
+         "correct": "A", "topic": "T", "explanation": ""}
+        for i in range(15)
+    ]
+    repo = AsyncMock(side_effect=[
+        [{"count": 0}],                 # existing bank count
+        [{"content": "some study notes"}],  # notes_rows
+        [],                             # topics_rows
+    ])
+    with patch("api.edunote.quiz.repo_query", new=repo), \
+         patch("api.edunote.quiz.groq.call_json", new=AsyncMock(return_value=many)), \
+         patch("api.edunote.quiz.Question", side_effect=lambda **kw: SimpleNamespace(save=AsyncMock(), **kw)):
+        async with _client() as client:
+            resp = await client.post("/api/edunote/quiz/generate/notebook:test")
+    assert resp.status_code == 200
+    assert resp.json()["generated"] == 10
+
+
+@pytest.mark.asyncio
+async def test_flashcards_generate_saves_at_most_8():
+    """Prompt asks for 8 flashcards; cap at 8 even if the model returns more."""
+    many = [{"front": f"F{i}", "back": "b", "topic": "T"} for i in range(12)]
+    repo = AsyncMock(side_effect=[
+        [{"count": 0}],                 # existing count
+        [{"content": "some study notes"}],  # notes_rows
+        [],                             # topics_rows
+    ])
+    with patch("api.edunote.flashcards.repo_query", new=repo), \
+         patch("api.edunote.flashcards.groq.call_json", new=AsyncMock(return_value=many)), \
+         patch("api.edunote.flashcards.Flashcard", side_effect=lambda **kw: SimpleNamespace(save=AsyncMock(), **kw)):
+        async with _client() as client:
+            resp = await client.post("/api/edunote/flashcards/generate/notebook:test")
+    assert resp.status_code == 200
+    assert resp.json()["generated"] == 8
+
+
+@pytest.mark.asyncio
+async def test_quiz_generate_502_when_ai_returns_non_list():
+    repo = AsyncMock(side_effect=[
+        [{"count": 0}],
+        [{"content": "some study notes"}],
+        [],
+    ])
+    with patch("api.edunote.quiz.repo_query", new=repo), \
+         patch("api.edunote.quiz.groq.call_json", new=AsyncMock(return_value={"nope": 1})):
+        async with _client() as client:
+            resp = await client.post("/api/edunote/quiz/generate/notebook:test")
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "AI returned invalid format"
+
+
+@pytest.mark.asyncio
+async def test_flashcards_generate_502_when_ai_returns_non_list():
+    repo = AsyncMock(side_effect=[
+        [{"count": 0}],
+        [{"content": "some study notes"}],
+        [],
+    ])
+    with patch("api.edunote.flashcards.repo_query", new=repo), \
+         patch("api.edunote.flashcards.groq.call_json", new=AsyncMock(return_value={"nope": 1})):
+        async with _client() as client:
+            resp = await client.post("/api/edunote/flashcards/generate/notebook:test")
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "AI returned invalid format"
 
 
 @pytest.mark.asyncio

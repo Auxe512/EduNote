@@ -53,10 +53,10 @@ async def generate_flashcards(notebook_id: str):
         f"Notes:\n{notes_text}{topic_hint}\n\nGenerate exactly 8 flashcards. Return ONLY the JSON array, no other text."
     )
     if not isinstance(cards_raw, list):
-        raise HTTPException(500, "AI returned invalid format")
+        raise HTTPException(502, "AI returned invalid format")
 
     saved = []
-    for c in cards_raw[:10]:
+    for c in cards_raw[:8]:
         card = Flashcard(
             notebook_id=notebook_id,
             front=c["front"],
@@ -84,10 +84,21 @@ async def review_flashcard(card_id: str, req: ReviewRequest):
 
 @router.get("/{notebook_id}/stats/{user_id}")
 async def get_flashcard_stats(notebook_id: str, user_id: str):
+    # flashcard_id is stored as a plain string, so we can't traverse
+    # flashcard_id.notebook_id. Resolve the notebook's card ids first, then
+    # match reviews against that string list.
+    cards = await repo_query(
+        "SELECT id FROM flashcard WHERE notebook_id=$nb",
+        {"nb": notebook_id}
+    )
+    card_ids = [str(c["id"]) for c in cards]
+    if not card_ids:
+        return {"total_reviewed": 0, "correct": 0}
+
     rows = await repo_query(
-        "SELECT flashcard_id, is_correct FROM flashcard_review "
-        "WHERE user_id=$uid AND flashcard_id.notebook_id=$nb",
-        {"uid": user_id, "nb": notebook_id}
+        "SELECT is_correct FROM flashcard_review "
+        "WHERE user_id=$uid AND flashcard_id IN $ids",
+        {"uid": user_id, "ids": card_ids}
     )
     total = len(rows)
     correct = sum(1 for r in rows if r["is_correct"])

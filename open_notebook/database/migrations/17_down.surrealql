@@ -1,0 +1,4 @@
+-- Revert migration 17: restore the original (record-typed / stray) field defs.
+DEFINE FIELD notebook_id ON TABLE flashcard_review TYPE string;
+DEFINE FIELD OVERWRITE user_id ON TABLE flashcard_review TYPE record<user>;
+DEFINE FIELD OVERWRITE note_id ON TABLE study_session TYPE option<record<note>>;

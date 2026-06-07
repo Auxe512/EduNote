@@ -49,6 +49,8 @@ async def analyze_exam(req: AnalyzeRequest):
         ANALYZE_SYSTEM,
         f"Past exam questions:\n{exam_text}"
     )
+    if not isinstance(topics_raw, list):
+        raise HTTPException(502, "AI returned invalid format")
 
     paper = ExamPaper(notebook_id=req.notebook_id, file_name=req.source_id)
     await paper.save()

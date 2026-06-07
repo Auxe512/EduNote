@@ -61,10 +61,10 @@ async def generate_questions(notebook_id: str):
 
     questions_raw = await groq.call_json(QUIZ_SYSTEM, user_msg)
     if not isinstance(questions_raw, list):
-        raise HTTPException(500, "AI returned invalid format")
+        raise HTTPException(502, "AI returned invalid format")
 
     saved = []
-    for q in questions_raw[:12]:
+    for q in questions_raw[:10]:
         question = Question(
             notebook_id=notebook_id,
             question=q["question"],
@@ -117,6 +117,15 @@ async def submit_answer(attempt_id: str, req: AnswerRequest):
     question = q_rows[0]
     is_correct = req.chosen.upper() == question["correct"].upper()
 
+    # Idempotent per (attempt, question): re-answering must not create a second
+    # record, which would inflate the score denominator in complete_quiz.
+    existing = await repo_query(
+        "SELECT id FROM answer_record WHERE attempt_id=$aid AND question_id=$qid",
+        {"aid": attempt_id, "qid": req.question_id}
+    )
+    if existing:
+        return {"is_correct": is_correct, "correct": question["correct"], "duplicate": True}
+
     record = AnswerRecord(
         attempt_id=attempt_id,
         question_id=req.question_id,
@@ -128,6 +137,31 @@ async def submit_answer(attempt_id: str, req: AnswerRequest):
     return {"is_correct": is_correct, "correct": question["correct"]}
 
 
+def _summarize_answers(records: list) -> dict:
+    """Aggregate answer_record rows into correct/total counts and a weak-topic
+    list (highest error rate first). Shared by complete_quiz and get_result."""
+    total = len(records)
+    correct = sum(1 for r in records if r["is_correct"])
+
+    topic_stats: dict = {}
+    for r in records:
+        stats = topic_stats.setdefault(r["topic"], {"correct": 0, "total": 0})
+        stats["total"] += 1
+        if r["is_correct"]:
+            stats["correct"] += 1
+
+    weak_topics = sorted(
+        (
+            {"topic": t, "error_rate": round(1 - v["correct"] / v["total"], 2)}
+            for t, v in topic_stats.items()
+            if v["total"] > 0
+        ),
+        key=lambda x: x["error_rate"],
+        reverse=True,
+    )
+    return {"correct": correct, "total": total, "weak_topics": weak_topics}
+
+
 @router.post("/attempt/{attempt_id}/complete")
 async def complete_quiz(attempt_id: str):
     records = await repo_query(
@@ -137,32 +171,15 @@ async def complete_quiz(attempt_id: str):
     if not records:
         raise HTTPException(404, "No answers found for this attempt")
 
-    total = len(records)
-    correct = sum(1 for r in records if r["is_correct"])
-    score = round(correct / total * 100, 1)
-
-    topic_stats: dict = {}
-    for r in records:
-        t = r["topic"]
-        if t not in topic_stats:
-            topic_stats[t] = {"correct": 0, "total": 0}
-        topic_stats[t]["total"] += 1
-        if r["is_correct"]:
-            topic_stats[t]["correct"] += 1
-
-    weak_topics = [
-        {"topic": t, "error_rate": round(1 - v["correct"] / v["total"], 2)}
-        for t, v in topic_stats.items()
-        if v["total"] > 0
-    ]
-    weak_topics.sort(key=lambda x: x["error_rate"], reverse=True)
+    summary = _summarize_answers(records)
+    score = round(summary["correct"] / summary["total"] * 100, 1)
 
     await repo_query(
         "UPDATE type::thing($id) SET score=$score, completed=true",
         {"id": attempt_id, "score": score}
     )
 
-    return {"score": score, "correct": correct, "total": total, "weak_topics": weak_topics}
+    return {"score": score, **summary}
 
 
 @router.get("/attempt/{attempt_id}/result")
@@ -178,28 +195,9 @@ async def get_result(attempt_id: str):
     if not attempt.get("completed"):
         return attempt
 
-    # Compute result stats from answer_record
     records = await repo_query(
         "SELECT is_correct, topic FROM answer_record WHERE attempt_id=$id",
         {"id": attempt_id}
     )
-    total = len(records)
-    correct = sum(1 for r in records if r["is_correct"])
-    topic_stats: dict = {}
-    for r in records:
-        t = r["topic"]
-        if t not in topic_stats:
-            topic_stats[t] = {"correct": 0, "total": 0}
-        topic_stats[t]["total"] += 1
-        if r["is_correct"]:
-            topic_stats[t]["correct"] += 1
-    weak_topics = sorted(
-        [{"topic": t, "error_rate": round(1 - v["correct"] / v["total"], 2)}
-         for t, v in topic_stats.items()],
-        key=lambda x: x["error_rate"], reverse=True
-    )
-
-    attempt["correct"] = correct
-    attempt["total"] = total
-    attempt["weak_topics"] = weak_topics
+    attempt.update(_summarize_answers(records))
     return attempt

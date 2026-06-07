@@ -1,0 +1,12 @@
+-- Migration 17: finish the record<...> -> string conversion that migration 16
+-- missed for two fields, and drop a stray column.
+--
+-- 1) flashcard_review.notebook_id: migration 16 mistakenly added this required
+--    column to a table that has no notebook_id, breaking every review insert.
+-- 2) flashcard_review.user_id: still record<user>, but the API stores plain
+--    strings (e.g. "user:wang") -> every review insert failed.
+-- 3) study_session.note_id: still option<record<note>>, but the API stores a
+--    plain note id string -> recording a note-read session failed.
+REMOVE FIELD IF EXISTS notebook_id ON TABLE flashcard_review;
+DEFINE FIELD OVERWRITE user_id ON TABLE flashcard_review TYPE string;
+DEFINE FIELD OVERWRITE note_id ON TABLE study_session TYPE option<string>;

@@ -44,7 +44,7 @@ async def get_progress(notebook_id: str, user_id: str):
         completion_rate = min(100, activity_count * 20)  # 5 activities = 100%
     else:
         completion_rate = 0
-    read = min(activity_count, total) if total > 0 else activity_count
+    read = min(activity_count, total)
 
     attempts = await repo_query(
         "SELECT score FROM quiz_attempt "
