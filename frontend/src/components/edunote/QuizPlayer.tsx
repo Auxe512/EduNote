@@ -77,6 +77,10 @@ export function QuizPlayer({ notebookId, userId }: { notebookId: string; userId:
     }
   }
 
+  // The backend samples up to 10 questions (min(10, bank)); show the real number
+  // so the button never promises a different count than the quiz actually has.
+  const quizSize = Math.min(10, bankCount && bankCount > 0 ? bankCount : 10);
+
   if (!attemptId) return (
     <div className="p-4 space-y-4">
       <h2 className="text-xl font-bold">✎ 測驗練習</h2>
@@ -85,7 +89,7 @@ export function QuizPlayer({ notebookId, userId }: { notebookId: string; userId:
       )}
       <button onClick={startQuiz} disabled={loading || generating}
         className="bg-green-500 text-white px-6 py-3 rounded-lg text-lg hover:bg-green-600 disabled:opacity-50">
-        {loading ? "載入中..." : generating ? "生成題目中..." : "開始測驗（隨機 5 題）"}
+        {loading ? "載入中..." : generating ? "生成題目中..." : `開始測驗（隨機 ${quizSize} 題）`}
       </button>
       {bankCount !== null && bankCount < 25 && (
         <button onClick={generateMore} disabled={generating}
