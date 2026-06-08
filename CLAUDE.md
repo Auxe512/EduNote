@@ -43,6 +43,14 @@ EduNote tables: `study_session`, `quiz_attempt`, `answer_record`, `flashcard`,
   (`reference` relation), not `note` records (`artifact` relation). Quiz/flashcard generation uses
   `api/edunote/content.py::gather_notebook_text()` which reads both — otherwise uploaded lectures
   are invisible and QuickPrep reports "no notes found".
+- **Notebooks are scoped per student via an `owner` field** (migration 18, `option<string>`
+  holding the student id like `user:王小明`). `GET /notebooks?owner=...` filters to that student;
+  with no `owner` it returns all (so non-EduNote callers are unaffected). The frontend injects the
+  current student id from localStorage as `owner` on every notebook list/create
+  (`frontend/src/lib/api/notebooks.ts`), and the `輸入名字` gate is identity-first on the
+  `/notebooks` landing page. Each student uploads their own materials; there is NO server-side
+  access control on notebook *detail* endpoints — list scoping only (fine for a classroom demo,
+  not real multi-tenant security).
 - **EduNote FK fields are `string`, not `record<>`.** `flashcard_review.user_id` and
   `study_session.note_id` are plain strings (per-user IDs from `localStorage:edunote:student_id`).
   Migration 17 fixed this; stat queries resolve child rows by `... IN $ids`, not string-FK traversal.
