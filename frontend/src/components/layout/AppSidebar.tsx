@@ -31,15 +31,11 @@ import {
   Book,
   Search,
   Mic,
-  Bot,
-  Shuffle,
-  Settings,
   LogOut,
   ChevronLeft,
   Menu,
   FileText,
   Plus,
-  Wrench,
   Command,
 } from 'lucide-react'
 
@@ -63,15 +59,18 @@ const getNavigation = (t: TFunction) => [
       { name: t('navigation.podcasts'), href: '/podcasts', icon: Mic },
     ],
   },
-  {
-    title: t('navigation.manage'),
-    items: [
-      { name: t('navigation.models'), href: '/settings/api-keys', icon: Bot },
-      { name: t('navigation.transformations'), href: '/transformations', icon: Shuffle },
-      { name: t('navigation.settings'), href: '/settings', icon: Settings },
-      { name: t('navigation.advanced'), href: '/advanced', icon: Wrench },
-    ],
-  },
+  // EduNote demo: the "管理" section (模型 / 轉換 / 設定 / 進階) is hidden so
+  // students can't change the shared global model/API settings and break the
+  // app for everyone. Restore this block after the demo to re-enable it.
+  // {
+  //   title: t('navigation.manage'),
+  //   items: [
+  //     { name: t('navigation.models'), href: '/settings/api-keys', icon: Bot },
+  //     { name: t('navigation.transformations'), href: '/transformations', icon: Shuffle },
+  //     { name: t('navigation.settings'), href: '/settings', icon: Settings },
+  //     { name: t('navigation.advanced'), href: '/advanced', icon: Wrench },
+  //   ],
+  // },
 ] as const
 
 type CreateTarget = 'source' | 'notebook' | 'podcast'
