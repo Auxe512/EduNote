@@ -21,6 +21,9 @@ router = APIRouter()
 async def get_notebooks(
     archived: Optional[bool] = Query(None, description="Filter by archived status"),
     order_by: str = Query("updated desc", description="Order by field and direction"),
+    owner: Optional[str] = Query(
+        None, description="EduNote: only return notebooks owned by this student id"
+    ),
 ):
     """Get all notebooks with optional filtering and ordering."""
     try:
@@ -49,16 +52,26 @@ async def get_notebooks(
                 detail=f"Invalid order_by format: '{order_by}'. Expected 'field' or 'field direction'",
             )
 
+        # EduNote: when an owner (student id) is supplied, only return that
+        # student's notebooks. When absent, keep the original behaviour (return
+        # all) so non-EduNote callers are unaffected.
+        where_clause = ""
+        params: dict = {}
+        if owner:
+            where_clause = "WHERE owner = $owner"
+            params["owner"] = owner
+
         # Build the query with counts
         query = f"""
             SELECT *,
             count(<-reference.in) as source_count,
             count(<-artifact.in) as note_count
             FROM notebook
+            {where_clause}
             ORDER BY {validated_order_by}
         """
 
-        result = await repo_query(query)
+        result = await repo_query(query, params)
 
         # Filter by archived status if specified
         if archived is not None:
@@ -93,6 +106,7 @@ async def create_notebook(notebook: NotebookCreate):
         new_notebook = Notebook(
             name=notebook.name,
             description=notebook.description,
+            owner=notebook.owner,
         )
         await new_notebook.save()
 

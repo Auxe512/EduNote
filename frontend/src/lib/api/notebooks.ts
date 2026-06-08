@@ -7,9 +7,19 @@ import {
   NotebookDeleteResponse,
 } from '@/lib/types/api'
 
+// EduNote: notebooks are scoped per student. The current student's id lives in
+// localStorage (set on the "輸入名字" gate); inject it as `owner` so each student
+// only lists/creates their own notebooks. Returns undefined before a name is set.
+function currentStudentId(): string | undefined {
+  if (typeof window === 'undefined') return undefined
+  return localStorage.getItem('edunote:student_id') ?? undefined
+}
+
 export const notebooksApi = {
   list: async (params?: { archived?: boolean; order_by?: string }) => {
-    const response = await apiClient.get<NotebookResponse[]>('/notebooks', { params })
+    const response = await apiClient.get<NotebookResponse[]>('/notebooks', {
+      params: { ...params, owner: currentStudentId() },
+    })
     return response.data
   },
 
@@ -19,7 +29,10 @@ export const notebooksApi = {
   },
 
   create: async (data: CreateNotebookRequest) => {
-    const response = await apiClient.post<NotebookResponse>('/notebooks', data)
+    const response = await apiClient.post<NotebookResponse>('/notebooks', {
+      ...data,
+      owner: currentStudentId(),
+    })
     return response.data
   },
 

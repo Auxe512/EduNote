@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { AppShell } from '@/components/layout/AppShell'
 import { NotebookList } from './components/NotebookList'
@@ -10,9 +11,14 @@ import { useNotebooks } from '@/lib/hooks/use-notebooks'
 import { CreateNotebookDialog } from '@/components/notebooks/CreateNotebookDialog'
 import { Input } from '@/components/ui/input'
 import { useTranslation } from '@/lib/hooks/use-translation'
+import { useStudentId } from '@/lib/hooks/use-student-id'
+import { StudentIdSetup } from '@/components/edunote/StudentIdSetup'
+import { QUERY_KEYS } from '@/lib/api/query-client'
 
 export default function NotebooksPage() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const { userId, isReady, setStudentName } = useStudentId()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const { data: notebooks, isLoading, refetch } = useNotebooks(false)
@@ -46,6 +52,23 @@ export default function NotebooksPage() {
 
   const hasArchived = (archivedNotebooks?.length ?? 0) > 0
   const isSearching = normalizedQuery.length > 0
+
+  // EduNote: notebooks are per-student, so a student must identify themselves
+  // before we show (or create) anything. Until then, show the name gate. On
+  // submit, refetch notebooks so the list reflects the now-known owner. This
+  // sits after all hooks so the rules of hooks are not violated.
+  if (isReady && !userId) {
+    return (
+      <AppShell>
+        <StudentIdSetup
+          onSubmit={(name) => {
+            setStudentName(name)
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.notebooks })
+          }}
+        />
+      </AppShell>
+    )
+  }
 
   return (
     <AppShell>

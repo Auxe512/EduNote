@@ -1,0 +1,1 @@
+REMOVE FIELD IF EXISTS owner ON TABLE notebook;

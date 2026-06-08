@@ -7,6 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class NotebookCreate(BaseModel):
     name: str = Field(..., description="Name of the notebook")
     description: str = Field(default="", description="Description of the notebook")
+    owner: Optional[str] = Field(
+        default=None, description="EduNote student id that owns this notebook"
+    )
 
 
 class NotebookUpdate(BaseModel):

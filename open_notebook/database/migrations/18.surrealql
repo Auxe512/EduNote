@@ -1,0 +1,4 @@
+-- EduNote: scope notebooks per student so each student only sees their own.
+-- owner holds the student id string (e.g. "user:王小明"); legacy notebooks
+-- created before this have owner = NONE and simply won't match any student.
+DEFINE FIELD OVERWRITE owner ON TABLE notebook TYPE option<string>;

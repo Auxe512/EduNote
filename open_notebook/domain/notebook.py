@@ -18,6 +18,9 @@ class Notebook(ObjectModel):
     name: str
     description: str
     archived: Optional[bool] = False
+    # EduNote: student id (e.g. "user:王小明") that owns this notebook. Legacy
+    # notebooks created before per-student scoping have owner = None.
+    owner: Optional[str] = None
 
     @field_validator("name")
     @classmethod
