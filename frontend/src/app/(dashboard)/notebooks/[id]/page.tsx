@@ -201,7 +201,7 @@ export default function NotebookPage() {
             {/* Sources Column */}
             <div className={cn(
               'transition-all duration-150',
-              sourcesCollapsed ? 'w-12 flex-shrink-0' : 'flex-none basis-1/3'
+              sourcesCollapsed ? 'w-12 flex-shrink-0' : 'flex-none basis-1/4'
             )}>
               <SourcesColumn
                 sources={sources}
@@ -220,7 +220,7 @@ export default function NotebookPage() {
             {/* Notes Column */}
             <div className={cn(
               'transition-all duration-150',
-              notesCollapsed ? 'w-12 flex-shrink-0' : 'flex-none basis-1/3'
+              notesCollapsed ? 'w-12 flex-shrink-0' : 'flex-none basis-1/4'
             )}>
               <NotesColumn
                 notes={notes}
