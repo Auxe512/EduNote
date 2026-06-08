@@ -277,7 +277,7 @@ export function ChatPanel({
         )}
 
         {/* Input Area */}
-        <div className="flex-shrink-0 p-4 space-y-3 border-t">
+        <div className="flex-shrink-0 p-3 space-y-2 border-t">
           {/* Model selector */}
           {onModelChange && (
             <div className="flex items-center justify-between">
@@ -300,8 +300,8 @@ export function ChatPanel({
               onKeyDown={handleKeyDown}
               placeholder={`${t('chat.sendPlaceholder')} (${t('chat.pressToSend').replace('{key}', keyHint)})`}
               disabled={isStreaming}
-              className="flex-1 min-h-[56px] max-h-[200px] resize-none py-2.5 px-3 min-w-0 text-base leading-relaxed"
-              rows={2}
+              className="flex-1 min-h-[44px] max-h-[140px] resize-none py-2 px-3 min-w-0 text-base leading-relaxed"
+              rows={1}
             />
             <Button
               onClick={handleSend}

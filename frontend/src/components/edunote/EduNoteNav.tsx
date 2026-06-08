@@ -19,9 +19,9 @@ export function EduNoteNav({ notebookRawId }: EduNoteNavProps) {
   const pathname = usePathname();
 
   return (
-    <div className="mt-4 border-t pt-3">
-      <p className="text-xs font-semibold text-gray-400 uppercase mb-2">EduNote</p>
-      <nav className="space-y-1">
+    <div className="mt-3 border-t pt-3 flex flex-wrap items-center gap-2">
+      <span className="text-xs font-semibold text-gray-400 uppercase mr-1">EduNote</span>
+      <nav className="flex flex-wrap items-center gap-1.5">
         {NAV_ITEMS.map(item => {
           const href = item.href(notebookRawId);
           const isActive = pathname === href;
@@ -29,14 +29,14 @@ export function EduNoteNav({ notebookRawId }: EduNoteNavProps) {
             <Link
               key={href}
               href={href}
-              className={`block px-2 py-1 rounded text-sm hover:bg-gray-100 ${item.color} ${isActive ? "bg-gray-100 font-semibold" : ""}`}
+              className={`px-3 py-1 rounded-full text-sm border transition-colors hover:bg-gray-100 ${item.color} ${isActive ? "bg-gray-100 font-semibold border-current" : "border-gray-200"}`}
             >
               {item.label}
             </Link>
           );
         })}
       </nav>
-      <div className="mt-3">
+      <div className="ml-auto">
         <QuickPrepButton
           notebookId={`notebook:${notebookRawId}`}
           notebookRawId={notebookRawId}

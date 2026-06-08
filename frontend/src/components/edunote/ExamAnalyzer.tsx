@@ -83,7 +83,7 @@ export function ExamAnalyzer({ notebookId }: { notebookId: string }) {
       {topics.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">考點主題（出現頻率）</h3>
+            <h3 className="font-semibold">考點主題（重要度）</h3>
             <button
               onClick={async () => {
                 await fetch(`/api/edunote/exam/topics/${notebookId}`, { method: "DELETE" });
@@ -102,7 +102,7 @@ export function ExamAnalyzer({ notebookId }: { notebookId: string }) {
               <div className="flex-1 bg-gray-200 h-2 rounded">
                 <div className="bg-orange-400 h-2 rounded" style={{ width: `${Math.min(t.count * 10, 100)}%` }} />
               </div>
-              <span className="text-sm text-gray-600">出現 {t.count} 次</span>
+              <span className="text-sm text-gray-600">重要度 {t.count}</span>
               {t.count >= 5 && <span className="text-orange-500">🔥</span>}
             </div>
           ))}

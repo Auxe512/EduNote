@@ -51,8 +51,8 @@ export function NotebookHeader({ notebook }: NotebookHeaderProps) {
 
   return (
     <>
-      <div className="border-b pb-6">
-        <div className="space-y-2">
+      <div className="border-b pb-3">
+        <div className="space-y-1">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 flex-1">
               <InlineEdit
